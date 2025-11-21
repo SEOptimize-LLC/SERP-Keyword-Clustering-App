@@ -34,15 +34,27 @@ if not dataforseo_pass:
         "DataforSEO API Password", type="password"
     )
 
-openai_api_key = st.secrets.get("OPENAI_API_KEY", "")
-if not openai_api_key:
-    openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
+# AI Provider Selection
+ai_provider = st.sidebar.radio(
+    "Select AI Provider",
+    ["OpenAI (Batch API - 50% off)", "OpenRouter (Standard API)"]
+)
 
-openrouter_api_key = st.secrets.get("OPENROUTER_API_KEY", "")
-if not openrouter_api_key:
-    openrouter_api_key = st.sidebar.text_input(
-        "OpenRouter API Key (Optional)", type="password"
-    )
+openai_api_key = ""
+openrouter_api_key = ""
+
+if ai_provider == "OpenAI (Batch API - 50% off)":
+    openai_api_key = st.secrets.get("OPENAI_API_KEY", "")
+    if not openai_api_key:
+        openai_api_key = st.sidebar.text_input(
+            "OpenAI API Key", type="password"
+        )
+else:
+    openrouter_api_key = st.secrets.get("OPENROUTER_API_KEY", "")
+    if not openrouter_api_key:
+        openrouter_api_key = st.sidebar.text_input(
+            "OpenRouter API Key", type="password"
+        )
 
 redis_url = st.secrets.get("REDIS_URL", "")
 if not redis_url:
@@ -93,7 +105,22 @@ with tab1:
     uploaded_file = st.file_uploader("Upload Keywords CSV", type="csv")
     
     if uploaded_file:
-        df = pd.read_csv(uploaded_file)
+        try:
+            df = pd.read_csv(uploaded_file)
+            # Check if it looks like a single column with separators
+            if len(df.columns) == 1 and ';' in df.columns[0]:
+                # Reload with python engine and separator detection
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, sep=None, engine='python')
+            elif (len(df.columns) == 1 and
+                  df.iloc[0].astype(str).str.contains(';').any()):
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, sep=None, engine='python')
+        except Exception:
+            # Fallback
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, sep=None, engine='python')
+
         # Try to find keyword column
         cols = [c.lower() for c in df.columns]
         if 'keyword' in cols:
@@ -168,13 +195,8 @@ with tab2:
         if st.session_state.clusters:
             st.subheader("AI Intent Analysis")
 
-            # AI Provider Selection
-            ai_provider = st.radio(
-                "Select AI Provider",
-                ["OpenAI (Batch API - 50% off)", "OpenRouter (Standard API)"]
-            )
-
             if ai_provider == "OpenAI (Batch API - 50% off)":
+                st.info("Using OpenAI Batch API for cost savings.")
                 if st.button("Submit Batch Job to OpenAI"):
                     if not openai_api_key:
                         st.error("Please provide OpenAI API Key.")
