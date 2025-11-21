@@ -89,68 +89,82 @@ class SERPClusteringEngine:
                 keywords_to_fetch.append(kw)
 
         # Fetch missing keywords
-        # Note: DataForSEO supports batching up to 100 keywords in a single POST
-        # We will implement batching here for efficiency.
-        batch_size = 50  # Safe batch size
-        for i in range(0, len(keywords_to_fetch), batch_size):
-            batch = keywords_to_fetch[i:i+batch_size]
-            # Prepare batch request
-            post_data = []
-            for kw in batch:
-                post_data.append(dict(
-                    keyword=base64.b64encode(
-                        kw.encode('utf-8')
-                    ).decode('utf-8'),
-                    location_code=location_code,
-                    language_code=language_code,
-                    depth=10
-                ))
-
+        # Note: DataForSEO supports batching up to 100 keywords in a single
+        # POST. We will implement batching here for efficiency.
+        # DataforSEO Live endpoint often restricts to 1 task per request
+        # or has strict concurrency limits. We will fetch
+        # sequentially/concurrently but with 1 task per payload to be safe.
+        
+        # We'll use a semaphore to limit concurrency if we were using aiohttp,
+        # but here we are using requests in a loop. To speed it up without
+        # breaking the "one task" rule, we can use a ThreadPoolExecutor.
+        
+        import concurrent.futures
+        
+        def fetch_single_keyword(kw):
+            post_data = [dict(
+                keyword=base64.b64encode(
+                    kw.encode('utf-8')
+                ).decode('utf-8'),
+                location_code=location_code,
+                language_code=language_code,
+                depth=10
+            )]
+            
             try:
                 response = requests.post(
                     "https://api.dataforseo.com/v3/serp/google/organic/"
                     "live/advanced",
                     auth=(self.client.api_user, self.client.api_password),
                     json=post_data,
-                    timeout=120
+                    timeout=60
                 )
-
+                
                 if response.status_code == 200:
                     resp_json = response.json()
                     if 'tasks' in resp_json:
                         for task in resp_json['tasks']:
                             if task['status_code'] == 20000:
-                                # Decode keyword from result if possible,
-                                # or map by index if order is preserved
-                                # DataForSEO returns results in order.
-                                # However, let's rely on the 'data' object
-                                # inside result if available,
-                                # but 'keyword' is in the 'data' block.
                                 result_data = task['result'][0]
-                                # This might be the query
                                 kw_original = result_data['keyword']
-
-                                # Extract URLs
+                                
                                 urls = []
                                 titles = []
                                 for item in result_data.get('items', []):
                                     if item['type'] == 'organic':
                                         urls.append(item['url'])
                                         titles.append(item['title'])
-
+                                
                                 serp_data = {
                                     'urls': urls[:10],
                                     'titles': titles[:10]
                                 }
-                                results[kw_original] = serp_data
                                 self.cache_serp(kw_original, serp_data)
+                                return kw_original, serp_data
                             else:
                                 print(f"Task error: {task['status_message']}")
+                                return None
                 else:
-                    print(f"Batch request failed: {response.status_code}")
-
+                    print(f"Request failed: {response.status_code}")
+                    return None
             except Exception as e:
-                print(f"Exception in batch fetch: {e}")
+                print(f"Exception fetching {kw}: {e}")
+                return None
+
+        # Use ThreadPoolExecutor for concurrency
+        # Limit workers to avoid hitting rate limits too hard (e.g., 20)
+        # DataforSEO allows 2000 req/min, so 20 workers is safe.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            future_to_kw = {
+                executor.submit(fetch_single_keyword, kw): kw
+                for kw in keywords_to_fetch
+            }
+            
+            for future in concurrent.futures.as_completed(future_to_kw):
+                result = future.result()
+                if result:
+                    kw, data = result
+                    results[kw] = data
 
             # Simple progress update if running in Streamlit
             # if 'progress_bar' in st.session_state:
