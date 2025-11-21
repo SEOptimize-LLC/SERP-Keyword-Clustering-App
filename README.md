@@ -65,12 +65,15 @@ This application is a powerful SEO tool designed to cluster keywords based on li
 
 1.  Push this code to a GitHub repository.
 2.  Connect your repository to [Streamlit Cloud](https://streamlit.io/cloud).
-3.  In the App Settings -> **Secrets**, add your API keys and Redis URL:
+3.  In the App Settings -> **Secrets**, add your API keys and Redis URL. This allows the app to automatically load your credentials without manual entry.
 
     ```toml
+    DATAFORSEO_USER = "your_user_id"
+    DATAFORSEO_PASSWORD = "your_password"
+    OPENAI_API_KEY = "sk-..."
     REDIS_URL = "redis://:password@host:port"
     ```
-    *(Note: You can also enter these manually in the sidebar if you prefer not to use Secrets)*.
+    *(Note: If you don't set these secrets, the app will prompt you to enter them manually in the sidebar)*.
 
 ## License
 
