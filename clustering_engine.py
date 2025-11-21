@@ -152,9 +152,9 @@ class SERPClusteringEngine:
                 return None
 
         # Use ThreadPoolExecutor for concurrency
-        # Limit workers to avoid hitting rate limits too hard (e.g., 20)
-        # DataforSEO allows 2000 req/min, so 20 workers is safe.
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        # Limit workers to 1 to strictly enforce sequential requests as per
+        # user feedback regarding "One task at a time" error.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future_to_kw = {
                 executor.submit(fetch_single_keyword, kw): kw
                 for kw in keywords_to_fetch
