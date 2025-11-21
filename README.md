@@ -14,7 +14,8 @@ This application is a powerful SEO tool designed to cluster keywords based on li
 
 *   Python 3.8+
 *   **DataforSEO API Credentials**: [Sign up here](https://dataforseo.com/)
-*   **OpenAI API Key**: [Sign up here](https://platform.openai.com/)
+*   **OpenAI API Key**: [Sign up here](https://platform.openai.com/) (Optional, for Batch API)
+*   **OpenRouter API Key**: [Sign up here](https://openrouter.ai/) (Optional, for flexible model selection)
 *   **Redis Database**: Required for caching SERP results. You can use a free tier from [Redis Cloud](https://redis.com/try-free/).
 
 ## Installation
@@ -36,7 +37,8 @@ This application is a powerful SEO tool designed to cluster keywords based on li
 
 2.  **Configuration (Sidebar)**:
     *   Enter your **DataforSEO API User** and **Password**.
-    *   Enter your **OpenAI API Key**.
+    *   Enter your **OpenAI API Key** (if using OpenAI Batch).
+    *   Enter your **OpenRouter API Key** (if using OpenRouter).
     *   Enter your **Redis URL** (e.g., `redis://:password@host:port`).
     *   Set your **Domain** (e.g., `example.com`) for cannibalization checks.
     *   Adjust the **SERP Overlap Threshold** if needed.
@@ -45,8 +47,9 @@ This application is a powerful SEO tool designed to cluster keywords based on li
     *   **Tab 1: Setup & Scrape**: Upload your CSV file containing keywords. Click "Fetch SERP Data" to retrieve live results.
     *   **Tab 2: Clustering & AI**:
         *   Click "Run SERP Overlap Clustering" to group keywords.
-        *   Click "Submit Batch Job to OpenAI" to send clusters for intent analysis.
-        *   Check back later (up to 24h) and click "Check Batch Status" to retrieve AI results.
+        *   **AI Analysis**:
+            *   Select **OpenAI (Batch API)** for cost savings (24h turnaround).
+            *   Select **OpenRouter** to choose specific models (e.g., Claude 3.5 Sonnet, Gemini Pro, etc.) for immediate results.
     *   **Tab 3: Analytics & Action**:
         *   View the clustered data with AI-generated labels and intents.
         *   Click "Check for Cannibalization" to identify conflicting pages.
@@ -71,6 +74,7 @@ This application is a powerful SEO tool designed to cluster keywords based on li
     DATAFORSEO_USER = "your_user_id"
     DATAFORSEO_PASSWORD = "your_password"
     OPENAI_API_KEY = "sk-..."
+    OPENROUTER_API_KEY = "sk-or-..."
     REDIS_URL = "redis://:password@host:port"
     ```
     *(Note: If you don't set these secrets, the app will prompt you to enter them manually in the sidebar)*.

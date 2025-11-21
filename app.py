@@ -21,16 +21,36 @@ st.title("🔍 SERP-Based AI Keyword Clustering & Cannibalization Analyzer")
 st.sidebar.header("Configuration")
 
 # API Keys
-dataforseo_user = st.sidebar.text_input("DataforSEO API User", type="password")
-dataforseo_pass = st.sidebar.text_input(
-    "DataforSEO API Password", type="password"
-)
-openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
-redis_url = st.sidebar.text_input(
-    "Redis URL (Optional)",
-    value=os.environ.get("REDIS_URL", ""),
-    type="password"
-)
+# Try to load from secrets first, otherwise use sidebar inputs
+dataforseo_user = st.secrets.get("DATAFORSEO_USER", "")
+if not dataforseo_user:
+    dataforseo_user = st.sidebar.text_input(
+        "DataforSEO API User", type="password"
+    )
+
+dataforseo_pass = st.secrets.get("DATAFORSEO_PASSWORD", "")
+if not dataforseo_pass:
+    dataforseo_pass = st.sidebar.text_input(
+        "DataforSEO API Password", type="password"
+    )
+
+openai_api_key = st.secrets.get("OPENAI_API_KEY", "")
+if not openai_api_key:
+    openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
+
+openrouter_api_key = st.secrets.get("OPENROUTER_API_KEY", "")
+if not openrouter_api_key:
+    openrouter_api_key = st.sidebar.text_input(
+        "OpenRouter API Key (Optional)", type="password"
+    )
+
+redis_url = st.secrets.get("REDIS_URL", "")
+if not redis_url:
+    redis_url = st.sidebar.text_input(
+        "Redis URL (Optional)",
+        value=os.environ.get("REDIS_URL", ""),
+        type="password"
+    )
 
 # Project Settings
 domain = st.sidebar.text_input(
@@ -146,50 +166,98 @@ with tab2:
             )
             
         if st.session_state.clusters:
-            st.subheader("AI Intent Analysis (OpenAI Batch API)")
-            
-            if st.button("Submit Batch Job to OpenAI"):
-                if not openai_api_key:
-                    st.error("Please provide OpenAI API Key.")
-                else:
-                    ai_processor = AIProcessor(openai_api_key)
-                    jsonl_content = ai_processor.prepare_batch_file(
-                        st.session_state.clusters
-                    )
+            st.subheader("AI Intent Analysis")
 
-                    try:
-                        file_id = ai_processor.upload_batch_file(jsonl_content)
-                        batch_id = ai_processor.create_batch_job(file_id)
-                        st.session_state.batch_id = batch_id
-                        st.success(f"Batch Job Submitted! ID: {batch_id}")
-                        st.info(
-                            "Check back in ~24 hours (or sooner) for results."
+            # AI Provider Selection
+            ai_provider = st.radio(
+                "Select AI Provider",
+                ["OpenAI (Batch API - 50% off)", "OpenRouter (Standard API)"]
+            )
+
+            if ai_provider == "OpenAI (Batch API - 50% off)":
+                if st.button("Submit Batch Job to OpenAI"):
+                    if not openai_api_key:
+                        st.error("Please provide OpenAI API Key.")
+                    else:
+                        ai_processor = AIProcessor(openai_api_key)
+                        jsonl_content = ai_processor.prepare_batch_file(
+                            st.session_state.clusters
                         )
-                    except Exception as e:
-                        st.error(f"Error submitting batch: {e}")
 
-            if st.session_state.batch_id:
-                st.write(f"Current Batch ID: `{st.session_state.batch_id}`")
-                if st.button("Check Batch Status"):
-                    ai_processor = AIProcessor(openai_api_key)
-                    try:
-                        status = ai_processor.check_batch_status(
-                            st.session_state.batch_id
-                        )
-                        st.write(f"Status: **{status.status}**")
-
-                        if (status.status == "completed" and
-                                status.output_file_id):
-                            st.success(
-                                "Batch Completed! Retrieving results..."
+                        try:
+                            file_id = ai_processor.upload_batch_file(
+                                jsonl_content
                             )
-                            results = ai_processor.retrieve_batch_results(
-                                status.output_file_id
+                            batch_id = ai_processor.create_batch_job(file_id)
+                            st.session_state.batch_id = batch_id
+                            st.success(f"Batch Job Submitted! ID: {batch_id}")
+                            st.info(
+                                "Check back in ~24 hours (or sooner) for "
+                                "results."
+                            )
+                        except Exception as e:
+                            st.error(f"Error submitting batch: {e}")
+
+                if st.session_state.batch_id:
+                    st.write(
+                        f"Current Batch ID: `{st.session_state.batch_id}`"
+                    )
+                    if st.button("Check Batch Status"):
+                        ai_processor = AIProcessor(openai_api_key)
+                        try:
+                            status = ai_processor.check_batch_status(
+                                st.session_state.batch_id
+                            )
+                            st.write(f"Status: **{status.status}**")
+
+                            if (status.status == "completed" and
+                                    status.output_file_id):
+                                st.success(
+                                    "Batch Completed! Retrieving results..."
+                                )
+                                results = ai_processor.retrieve_batch_results(
+                                    status.output_file_id
+                                )
+                                st.session_state.ai_results = results
+                                st.success("Results retrieved and stored.")
+                        except Exception as e:
+                            st.error(f"Error checking status: {e}")
+
+            else:  # OpenRouter
+                model_options = [
+                    "openai/gpt-4.1",
+                    "openai/gpt-5.1",
+                    "openai/gpt-5-mini",
+                    "anthropic/claude-sonnet-4.5",
+                    "google/gemini-3-pro-preview",
+                    "google/gemini-2.5-flash-preview-09-2025",
+                    "x-ai/grok-4.1-fast",
+                    "qwen/qwen3-vl-8b-thinking"
+                ]
+                selected_model = st.selectbox("Select Model", model_options)
+
+                if st.button("Run Analysis with OpenRouter"):
+                    if not openrouter_api_key:
+                        st.error("Please provide OpenRouter API Key.")
+                    else:
+                        ai_processor = AIProcessor(
+                            openrouter_api_key,
+                            base_url="https://openrouter.ai/api/v1"
+                        )
+                        with st.spinner(
+                            f"Analyzing {len(st.session_state.clusters)} "
+                            f"clusters with {selected_model}..."
+                        ):
+                            # Run async processing
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            results = loop.run_until_complete(
+                                ai_processor.process_with_openrouter(
+                                    st.session_state.clusters, selected_model
+                                )
                             )
                             st.session_state.ai_results = results
-                            st.success("Results retrieved and stored.")
-                    except Exception as e:
-                        st.error(f"Error checking status: {e}")
+                            st.success("Analysis complete!")
 
 # --- TAB 3: Analytics & Action ---
 with tab3:
